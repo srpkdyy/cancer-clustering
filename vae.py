@@ -19,10 +19,9 @@ class ResBlock(nn.Module):
         super(ResBlock, self).__init__()
 
         self.layers = nn.Sequential(
-#            conv3x3(in_planes, planes, bias=bias),
-#            nn.BatchNorm2d(planes),
-#            nn.ReLU(True),
-            ConvBlock(in_planes, planes, bias=bias),
+            conv3x3(in_planes, planes, bias=bias),
+            nn.BatchNorm2d(planes),
+            nn.ReLU(True),
             conv3x3(planes, planes, bias=bias),
             nn.BatchNorm2d(planes)
         )
@@ -87,21 +86,20 @@ class VAE(nn.Module):
         self.z_dim = z_dim
 
         if h_dims is None:
-            h_dims = [32, 64, 128, 256, 256, 512, 512]
+            h_dims = [32, 64, 128, 256, 512]
 
         # build encoder
         encoder = []
         for h_dim in h_dims:
-            encoder.append(ResBlock(in_channels, h_dim,
-                           downsample=nn.Conv2d(in_channels, h_dim,
-                           kernel_size=4, stride=2, padding=1, bias=False)))
+            encoder.append(ConvBlock(in_channels, h_dim))
             in_channels = h_dim
+        #encoder.append(ResBlock(in_channels, in_channels))
         self.encoder = nn.Sequential(*encoder)
 
-        width = 256 // (2 ** len(h_dims))
-        self.fc_mu = nn.Linear(h_dims[-1] * width**2, z_dim)
-        self.fc_logvar = nn.Linear(h_dims[-1] * width**2, z_dim)
-        self.fc = nn.Linear(z_dim, h_dims[-1] * width**2)
+        self.width = 256 // (2 ** len(h_dims))
+        self.fc_mu = nn.Linear(h_dims[-1] * self.width**2, z_dim)
+        self.fc_logvar = nn.Linear(h_dims[-1] * self.width**2, z_dim)
+        self.fc = nn.Linear(z_dim, h_dims[-1] * self.width**2)
 
         in_channels = h_dims[-1]
         del h_dims[-1]
@@ -109,6 +107,7 @@ class VAE(nn.Module):
         
         # build decoder
         decoder = []
+        #decoder.append(ResBlock(in_channels, in_channels))
         for h_dim in h_dims:
             decoder.append(ConvTBlock(in_channels, h_dim))
             in_channels = h_dim
@@ -144,7 +143,7 @@ class VAE(nn.Module):
 
     def decode(self, z):
         h = self.fc(z)
-        h = h.view(h.size(0), -1, 2, 2)
+        h = h.view(h.size(0), -1, self.width, self.width)
         return self.decoder(h)
 
     def forward(self, x):

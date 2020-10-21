@@ -20,6 +20,7 @@ parser.add_argument('--no-cuda', action='store_true')
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('-z', '--z-dim', type=int, default=64)
 parser.add_argument('--out', type=str, default='latest')
+parser.add_argument('--interval', type=int, default=10)
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
@@ -99,6 +100,8 @@ print(x[0].min())
 '''
 model = VAE(z_dim=args.z_dim).to(device)
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
+scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(args.epochs*0.5), int(args.epochs*0.8)], gamma=0.1) # 10 < 20 < 40
+
 
 def loss_function(recon_x, x, mu, logvar):
     MSE = F.mse_loss(recon_x, x)
@@ -150,14 +153,16 @@ if __name__ == '__main__':
     kld_loss = list()
     for epoch in range(1, args.epochs + 1):
         mse, kld = train(epoch)
-        mse_loss.append(mse.cpu().clone())
-        kld_loss.append(kld.cpu().clone())
+        mse_loss.append(mse.cpu().detach().clone().numpy())
+        kld_loss.append(kld.cpu().detach().clone().numpy())
+        scheduler.step()
         #test(epoch)
-        with torch.no_grad():
-            sample = model.sample(64, device=device).cpu()
-            sample = 0.5 * (sample + 1)
-            sample = sample.clamp(0, 1)
-            save_image(sample, 'result/recon/sample_' + str(epoch) + '.png')
+        if epoch % args.interval == 0:
+            with torch.no_grad():
+                sample = model.sample(64, device=device).cpu()
+                sample = 0.5 * (sample + 1)
+                sample = sample.clamp(0, 1)
+                save_image(sample, 'result/recon/sample_' + str(epoch) + '.png')
     loss = np.array([mse_loss, kld_loss])
     np.save('result/loss/' + args.out, loss)
 
